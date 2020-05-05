@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 3.9.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"xmwu2016.github.io","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="LinkedList简介LinkedList是双链表实现。值得注意的是LinkedList不是线程安全的。 构造函数与内部类1234567891011121314151617181920212223242526272829303132transient int size = 0;/** * Pointer to first node. * Invariant: (first == null &amp;am">
+<meta name="keywords" content="Java,源码解读">
+<meta property="og:type" content="article">
+<meta property="og:title" content="LinkedList源码分析">
+<meta property="og:url" content="http://xmwu2016.github.io/2018/01/20/LinkedList源码分析/index.html">
+<meta property="og:site_name" content="sanzhuan的个人博客">
+<meta property="og:description" content="LinkedList简介LinkedList是双链表实现。值得注意的是LinkedList不是线程安全的。 构造函数与内部类1234567891011121314151617181920212223242526272829303132transient int size = 0;/** * Pointer to first node. * Invariant: (first == null &amp;am">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2020-05-05T13:22:24.768Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="LinkedList源码分析">
+<meta name="twitter:description" content="LinkedList简介LinkedList是双链表实现。值得注意的是LinkedList不是线程安全的。 构造函数与内部类1234567891011121314151617181920212223242526272829303132transient int size = 0;/** * Pointer to first node. * Invariant: (first == null &amp;am">
+
+<link rel="canonical" href="http://xmwu2016.github.io/2018/01/20/LinkedList源码分析/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>LinkedList源码分析 | sanzhuan的个人博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">sanzhuan的个人博客</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">种一棵树最好的时间是十年前，其次是现在</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://xmwu2016.github.io/2018/01/20/LinkedList源码分析/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="sanzhuan">
+      <meta itemprop="description" content="sanzhuan's blog | java | rust">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="sanzhuan的个人博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          LinkedList源码分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2018-01-20 22:24:20" itemprop="dateCreated datePublished" datetime="2018-01-20T22:24:20+08:00">2018-01-20</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2020-05-05 21:22:24" itemprop="dateModified" datetime="2020-05-05T21:22:24+08:00">2020-05-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">In</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Java/" itemprop="url" rel="index"><span itemprop="name">Java</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="LinkedList简介"><a href="#LinkedList简介" class="headerlink" title="LinkedList简介"></a>LinkedList简介</h2><p>LinkedList是双链表实现。值得注意的是LinkedList不是线程安全的。</p>
+<h2 id="构造函数与内部类"><a href="#构造函数与内部类" class="headerlink" title="构造函数与内部类"></a>构造函数与内部类</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line">transient int size = 0;</span><br><span class="line">/**</span><br><span class="line"> * Pointer to first node.</span><br><span class="line"> * Invariant: (first == null &amp;&amp; last == null) ||</span><br><span class="line"> *            (first.prev == null &amp;&amp; first.item != null)</span><br><span class="line"> */</span><br><span class="line">transient Node&lt;E&gt; first;</span><br><span class="line">/**</span><br><span class="line"> * Pointer to last node.</span><br><span class="line"> * Invariant: (first == null &amp;&amp; last == null) ||</span><br><span class="line"> *            (last.next == null &amp;&amp; last.item != null)</span><br><span class="line"> */</span><br><span class="line">transient Node&lt;E&gt; last;</span><br><span class="line">	</span><br><span class="line">	private static class Node&lt;E&gt; &#123;</span><br><span class="line">        E item;</span><br><span class="line">        Node&lt;E&gt; next;</span><br><span class="line">        Node&lt;E&gt; prev;</span><br><span class="line"></span><br><span class="line">        Node(Node&lt;E&gt; prev, E element, Node&lt;E&gt; next) &#123;</span><br><span class="line">            this.item = element;</span><br><span class="line">            this.next = next;</span><br><span class="line">            this.prev = prev;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">	</span><br><span class="line">    public LinkedList() &#123;&#125;</span><br><span class="line">    </span><br><span class="line">	public LinkedList(Collection&lt;? extends E&gt; c) &#123;</span><br><span class="line">        this();</span><br><span class="line">        addAll(c);</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="增"><a href="#增" class="headerlink" title="增"></a>增</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">public boolean add(E e) &#123;</span><br><span class="line">    linkLast(e);</span><br><span class="line">    return true;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">void linkLast(E e) &#123;</span><br><span class="line">    final Node&lt;E&gt; l = last;</span><br><span class="line">    // new 一个新节点 pre为l next为 null</span><br><span class="line">    final Node&lt;E&gt; newNode = new Node&lt;&gt;(l, e, null);</span><br><span class="line">    // 尾节点指向新创建的节点</span><br><span class="line">    last = newNode;</span><br><span class="line">    // 如果之前链表为空 则头节点也指向新创建的节点</span><br><span class="line">    if (l == null)</span><br><span class="line">        first = newNode;</span><br><span class="line">    else</span><br><span class="line">    	// 否则把新节点挂在前节点后面</span><br><span class="line">        l.next = newNode;</span><br><span class="line">    size++;</span><br><span class="line">    modCount++;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="删"><a href="#删" class="headerlink" title="删"></a>删</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line">public E remove() &#123;</span><br><span class="line">    return removeFirst();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">public E removeFirst() &#123;</span><br><span class="line">    final Node&lt;E&gt; f = first;</span><br><span class="line">    if (f == null)</span><br><span class="line">        throw new NoSuchElementException();</span><br><span class="line">    return unlinkFirst(f);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">private E unlinkFirst(Node&lt;E&gt; f) &#123;</span><br><span class="line">    // assert f == first &amp;&amp; f != null;</span><br><span class="line">    final E element = f.item;</span><br><span class="line">    final Node&lt;E&gt; next = f.next;</span><br><span class="line">    f.item = null;</span><br><span class="line">    f.next = null; // help GC</span><br><span class="line">    //头节点指向一个节点</span><br><span class="line">    first = next;</span><br><span class="line">    if (next == null)</span><br><span class="line">        last = null;</span><br><span class="line">    else</span><br><span class="line">        next.prev = null;</span><br><span class="line">    size--;</span><br><span class="line">    modCount++;</span><br><span class="line">    return element;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="查"><a href="#查" class="headerlink" title="查"></a>查</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">  public E get(int index) &#123;</span><br><span class="line">      checkElementIndex(index);</span><br><span class="line">      return node(index).item;</span><br><span class="line">  &#125;</span><br><span class="line">  </span><br><span class="line">  Node&lt;E&gt; node(int index) &#123;</span><br><span class="line">      // assert isElementIndex(index);</span><br><span class="line">// index &lt; size / 2 从头节点开始往后遍历 否则从尾节点往前遍历</span><br><span class="line">      if (index &lt; (size &gt;&gt; 1)) &#123;</span><br><span class="line">          Node&lt;E&gt; x = first;</span><br><span class="line">          for (int i = 0; i &lt; index; i++)</span><br><span class="line">              x = x.next;</span><br><span class="line">          return x;</span><br><span class="line">      &#125; else &#123;</span><br><span class="line">          Node&lt;E&gt; x = last;</span><br><span class="line">          for (int i = size - 1; i &gt; index; i--)</span><br><span class="line">              x = x.prev;</span><br><span class="line">          return x;</span><br><span class="line">      &#125;</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<p>查找做了小优化，如果index &lt; size / 2，则从头节点开始往后遍历，否则从尾节点往前遍历。</p>
+<h2 id="改"><a href="#改" class="headerlink" title="改"></a>改</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">public E set(int index, E element) &#123;</span><br><span class="line">    checkElementIndex(index);</span><br><span class="line">    Node&lt;E&gt; x = node(index);</span><br><span class="line">    E oldVal = x.item;</span><br><span class="line">    x.item = element;</span><br><span class="line">    return oldVal;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><ul>
+<li>JDK8 源码</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Java/" rel="tag"># Java</a>
+              <a href="/tags/源码解读/" rel="tag"># 源码解读</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/01/20/ReentrantLock使用和源码分析/" rel="prev" title="ReentrantLock使用和源码分析">
+      <i class="fa fa-chevron-left"></i> ReentrantLock使用和源码分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2018/01/20/ArrayList实现源码分析/" rel="next" title="ArrayList实现源码分析">
+      ArrayList实现源码分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#LinkedList简介"><span class="nav-number">1.</span> <span class="nav-text">LinkedList简介</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#构造函数与内部类"><span class="nav-number">2.</span> <span class="nav-text">构造函数与内部类</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#增"><span class="nav-number">3.</span> <span class="nav-text">增</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#删"><span class="nav-number">4.</span> <span class="nav-text">删</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#查"><span class="nav-number">5.</span> <span class="nav-text">查</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#改"><span class="nav-number">6.</span> <span class="nav-text">改</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#参考"><span class="nav-number">7.</span> <span class="nav-text">参考</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">sanzhuan</p>
+  <div class="site-description" itemprop="description">sanzhuan's blog | java | rust</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">23</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">sanzhuan</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://muse.theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a>
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+<script src="/js/utils.js"></script><script src="/js/motion.js"></script>
+<script src="/js/schemes/muse.js"></script>
+<script src="/js/next-boot.js"></script>
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 3.9.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"xmwu2016.github.io","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="RPC简介RPC(Remote Procedure Call) 远程服务调用是现在常用的技术，用于多个服务间的互相调用。至于为什么要拆成多个服务，有各种各样的解释和原因，例如解耦、独立发布部署等好处。拆分成服务之后大家各自管理自己的数据和服务，经常会有需要别人数据和服务的需求，不能像整个一体(monothetic)应用时可以直接获取方法调用，需要通过网络传输调用其他机器上的服务，这样的跨网络、进程">
+<meta name="keywords" content="Java">
+<meta property="og:type" content="article">
+<meta property="og:title" content="RPC原理和实现">
+<meta property="og:url" content="http://xmwu2016.github.io/2018/02/04/RPC原理和实现/index.html">
+<meta property="og:site_name" content="sanzhuan的个人博客">
+<meta property="og:description" content="RPC简介RPC(Remote Procedure Call) 远程服务调用是现在常用的技术，用于多个服务间的互相调用。至于为什么要拆成多个服务，有各种各样的解释和原因，例如解耦、独立发布部署等好处。拆分成服务之后大家各自管理自己的数据和服务，经常会有需要别人数据和服务的需求，不能像整个一体(monothetic)应用时可以直接获取方法调用，需要通过网络传输调用其他机器上的服务，这样的跨网络、进程">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:image" content="http://xmwu2016.github.io/images/rpc.png">
+<meta property="og:updated_time" content="2020-05-05T13:22:24.768Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="RPC原理和实现">
+<meta name="twitter:description" content="RPC简介RPC(Remote Procedure Call) 远程服务调用是现在常用的技术，用于多个服务间的互相调用。至于为什么要拆成多个服务，有各种各样的解释和原因，例如解耦、独立发布部署等好处。拆分成服务之后大家各自管理自己的数据和服务，经常会有需要别人数据和服务的需求，不能像整个一体(monothetic)应用时可以直接获取方法调用，需要通过网络传输调用其他机器上的服务，这样的跨网络、进程">
+<meta name="twitter:image" content="http://xmwu2016.github.io/images/rpc.png">
+
+<link rel="canonical" href="http://xmwu2016.github.io/2018/02/04/RPC原理和实现/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>RPC原理和实现 | sanzhuan的个人博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">sanzhuan的个人博客</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">种一棵树最好的时间是十年前，其次是现在</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://xmwu2016.github.io/2018/02/04/RPC原理和实现/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="sanzhuan">
+      <meta itemprop="description" content="sanzhuan's blog | java | rust">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="sanzhuan的个人博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          RPC原理和实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2018-02-04 22:28:27" itemprop="dateCreated datePublished" datetime="2018-02-04T22:28:27+08:00">2018-02-04</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2020-05-05 21:22:24" itemprop="dateModified" datetime="2020-05-05T21:22:24+08:00">2020-05-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">In</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Java/" itemprop="url" rel="index"><span itemprop="name">Java</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="RPC简介"><a href="#RPC简介" class="headerlink" title="RPC简介"></a>RPC简介</h2><p>RPC(Remote Procedure Call) 远程服务调用是现在常用的技术，用于多个服务间的互相调用。至于为什么要拆成多个服务，有各种各样的解释和原因，例如解耦、独立发布部署等好处。拆分成服务之后大家各自管理自己的数据和服务，经常会有需要别人数据和服务的需求，不能像整个一体(monothetic)应用时可以直接获取方法调用，需要通过网络传输调用其他机器上的服务，这样的跨网络、进程通信手写起来非常繁琐易出错。所以出现了很多RPC框架，RPC框架的目标是让我们就想调用本地方法一样调用远程服务并且在性能、易用性等方面有一定需求。并且其他服务可能和自己使用的编程语言不相同，这时就有跨语言调用的情况。常见的RPC框架有thrift、grpc、dubbo等。</p>
+<h2 id="RPC原理浅析"><a href="#RPC原理浅析" class="headerlink" title="RPC原理浅析"></a>RPC原理浅析</h2><p>考虑一个精简的核心RPC所需要的模块。首先需要有处理网络连接通讯的模块，负责连接建立、管理和消息的传输。其次需要有编解码的模块，因为网络通讯都是传输的字节码，需要将我们使用的对象序列化和反序列化。剩下的就是客户端和服务器端的部分，服务器端暴露要开放的服务接口，客户调用服务接口的一个代理实现，这个代理实现负责收集数据、编码并传输给服务器然后等待结果返回。所以一个调用栈如下</p>
+<p>Client invoke =&gt; message object =&gt; encode to bytes =&gt; tranport through net =&gt; server decode byte to message object =&gt; server service handle message =&gt; encode handle result =&gt; write back through network<br><img src="/images/rpc.png" alt="rpc"></p>
+<h2 id="序列化和反序列化"><a href="#序列化和反序列化" class="headerlink" title="序列化和反序列化"></a>序列化和反序列化</h2><p>在应用中，如Java程序都是使用Java对象进行操作，最终传输到另一个台机器上，需要通过网络传输，但是网络传输只识别字节流，所以需要在应用数据和字节码进行转换的工具，一般讲这个转换过程称为编解码或序列化与反序列化。编码(Encode)或序列化(Serialize)的过程指从应用对象转化到字节流的过程，对应的工具也叫编码器(Encoder)，具体编码成什么样的字节流是由对应的编码算法、工具决定的。反过来，由字节流转换为应用对象的过程叫做解码或反序列化。常用的编码工具有protobuf、kryo、Java自带的序列化和反序列化、thrift序列化等。再者我们可以将对象转换成json、xml格式字符串，然后将字符串通过字符编码，如UTF-8等编码方式进行编解码。选择序列化工具时，需要考虑是否有跨语言支持、序列化后的数据大小、性能等因素。</p>
+<h2 id="IO传输"><a href="#IO传输" class="headerlink" title="IO传输"></a>IO传输</h2><h3 id="TCP粘包、拆包"><a href="#TCP粘包、拆包" class="headerlink" title="TCP粘包、拆包"></a>TCP粘包、拆包</h3><p>tcp传输过程中的任何一个节点都可能会将数据包拆分或合并，最终保证的是数据到达终点的顺序是一致的。由于TCP只关心字节数组流，并不知晓上层的数据格式。所以需要应用层来处理数据是否完整的问题，一般在数据协议上会采用一个字段来表示数据的长度，知道了消息的长度，就可以解决粘包的问题。对于拆包问题，当读到的数据长度比数据长度小时，要继续等待数据。Netty中提供了LengthFieldBasedFrameDecoder这个类帮助我们简化粘包、拆包问题，如我们定义协议为表示数据长度的4字节 + 数据，数据长度不包括长度字段本身，假设传输数据”0101”被转化为 0x 00 00 00 04 01 01。可以使用LengthFieldBasedFrameDecoder(0, 4, 0, 4)来进行解码。<br>解码遇到拆包时,LengthFieldBasedFrameDecoder中的decode方法中的</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">int frameLengthInt = (int) frameLength;</span><br><span class="line">        if (in.readableBytes() &lt; frameLengthInt) &#123;</span><br><span class="line">            return null;</span><br><span class="line">        &#125;</span><br></pre></td></tr></table></figure>
+
+<p>会返回null,数据会在ByteToMessageDecoder中累积，直到数据累积充足，解码后返回对象，由后续的Handler处理。</p>
+<h2 id="服务的注册发布和监听"><a href="#服务的注册发布和监听" class="headerlink" title="服务的注册发布和监听"></a>服务的注册发布和监听</h2><p>类似于域名访问的问题，我们无需记住一个http服务后的服务器是哪些，它们的变更对我们都是透明的。对应RPC服务，经常需要使用集群来保证服务的稳定性和共同提高系统的性能。为此需要提供一个注册中心，当服务器启动时进行服务注册，服务器宕机时注册中心能够检测到并将其从服务注册中心删除。客户端要访问一个服务时先到注册中心获取服务列表，缓存到本地，然后建立连接进行访问，并且当服务列表发生变化时会收到通知并修改本地缓存。</p>
+<h2 id="服务路由"><a href="#服务路由" class="headerlink" title="服务路由"></a>服务路由</h2><p>有注册中心后，调用方调用服务提供者时可以动态的获取调用方的地址等信息进行选择，类似域名的机制。这样增加了一层抽象，避免了写死ip等问题。又一次说明了Any problem in computer science can be solved by adding another level of indirection。当有多个服务提供者时，调用方需要在其中选择一个进行调用，常见的调用策略有随机、Round-Robin(轮询)、权重比例等。采取权重方式可以通过服务调用的耗时、异常数量进行动态调用权重，也可以进行人工调整。当我们需要更复杂的控制策略是，可以通过脚本编写策略，并可以动态修改。<br>通用的负载均衡又可以分为客户端的负载均衡和中间代理的负载均衡，客户端的负载均衡有客户端获取服务端列表，中间代理方式时客户端只需要连接一个代理服务器，有代理进行转发，可以类比nginx的作用。</p>
+<h2 id="IO调用方式"><a href="#IO调用方式" class="headerlink" title="IO调用方式"></a>IO调用方式</h2><h3 id="nio和bio"><a href="#nio和bio" class="headerlink" title="nio和bio"></a>nio和bio</h3><p>bio指的是传统的阻塞io，在Java中使用方式是Socket、ServerSocket、InputStream、OutputStream的组合。当读数据是，如果没有数据可读，该线程会被切换为阻塞状态，直到数据可读等待处理器调度运行，会进行两次上下文切换和两次用户态内核态切换，并且这样一个线程同时只能处理一个连接，线程是比较宝贵的资源，有线程协调加锁同步、上下文切换、创建和销毁线程、线程调度等开销，并且JVM中每个线程都会有1MB左右的栈大小，这样一线程一连接的方式无法应对单机数万的情况。Nio指non blocking io，即非阻塞io，当数据不可读时会返回一个错误而不是阻塞，在Java中，常用Selector、SocketChannel、ServerSocketChannel、ByteBuffer的组合实现nio服务，在一个Selector上可以监听多个连接的是否可读、可写、可连接等状态，这样一个线程就可以同时处理很多个连接，能够提高系统连接能力。</p>
+<h3 id="同步和异步"><a href="#同步和异步" class="headerlink" title="同步和异步"></a>同步和异步</h3><p>同步指发出一个请求后是否阻塞并一直等待结果返回，而异步可以在发送请求后先去执行其他任务，在一段时间后再获取结果或通过注册监听器设置回调。在Java中一般是通过Future或者一些Listener来实现异步调用。如ExecutorService.submit()方法返回一个Future，调用Future的get时会阻塞，可以在get时设置超时时间。Guava和Netty中的Future实现可以设置Listener在结果成功或失败时进行回调。</p>
+<h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><p>下面利用一些好用的框架帮助我们快速的实现一个RPC。 源代码在 simple-rpc</p>
+<p>netty 负责数据传输部分，netty作为异步事件驱动的高性能IO框架，使用方便久经考验，比手工编写nio代码方便不易出错。<br>kryo或protostuff 负责序列化和反序列化。google的 protobuf需要编写IDL文件然后生成，好处是能够生成各个语言的代码并且优化的比较。但是开发起来很繁琐，每次都编写修改IDL文件并生成有些痛苦。<br>zookeeper是一个分布式协调框架，可以作为一些配置数据的协调同步等。在我们的RPC框架中用作注册中心用来提供服务的注册和服务发现功能。其他类似功能的有consul、etcd等,这里有它们之间的比较</p>
+<h3 id="请求和返回的抽象"><a href="#请求和返回的抽象" class="headerlink" title="请求和返回的抽象"></a>请求和返回的抽象</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">@Data</span><br><span class="line">public class Request &#123;</span><br><span class="line">    private long requestId;</span><br><span class="line">    private Class&lt;?&gt; clazz;</span><br><span class="line">    private String method;</span><br><span class="line">    private Class&lt;?&gt;[] parameterTypes;</span><br><span class="line">    private Object[] params;</span><br><span class="line">    private long requestTime;</span><br><span class="line">&#125;</span><br><span class="line">@Data</span><br><span class="line">public class Response &#123;</span><br><span class="line">    private long requestId;</span><br><span class="line">    private Object response;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="编解码部分"><a href="#编解码部分" class="headerlink" title="编解码部分"></a>编解码部分</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line">public class RequestCodec extends ByteToMessageCodec&lt;Request&gt;&#123;</span><br><span class="line">    protected void encode(ChannelHandlerContext ctx, Request msg, ByteBuf out) throws Exception &#123;</span><br><span class="line">        byte[] bytes = Serializer.serialize(msg);</span><br><span class="line">        int length = bytes.length;</span><br><span class="line">        out.writeInt(length);</span><br><span class="line">        ByteBuf byteBuf = out.writeBytes(bytes);</span><br><span class="line">    &#125;</span><br><span class="line">    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List&lt;Object&gt; out) throws Exception &#123;</span><br><span class="line">        int length = in.readInt();</span><br><span class="line">        byte[] buffer = new byte[length];</span><br><span class="line">        in.readBytes(buffer);</span><br><span class="line">        Request request = Serializer.deserialize(Request.class, buffer);</span><br><span class="line">        out.add(request);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">public class ResponseCodec extends ByteToMessageCodec&lt;Response&gt;&#123;</span><br><span class="line">    private static final Logger LOGGER = LoggerFactory.getLogger(ResponseCodec.class);</span><br><span class="line">    protected void encode(ChannelHandlerContext ctx, Response msg, ByteBuf out) throws Exception &#123;</span><br><span class="line">        LOGGER.info(&quot;Encode &#123;&#125;&quot;, msg);</span><br><span class="line">        byte[] bytes = Serializer.serialize(msg);</span><br><span class="line">        int length = bytes.length;</span><br><span class="line">        out.writeInt(length);</span><br><span class="line">        ByteBuf byteBuf = out.writeBytes(bytes);</span><br><span class="line">    &#125;</span><br><span class="line">    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List&lt;Object&gt; out) throws Exception &#123;</span><br><span class="line">        int length = in.readInt();</span><br><span class="line">        byte[] buffer = new byte[length];</span><br><span class="line">        in.readBytes(buffer);</span><br><span class="line">        Response response = Serializer.deserialize(Response.class, buffer);</span><br><span class="line">        out.add(response);</span><br><span class="line">        LOGGER.info(&quot;Decode Result: &#123;&#125;&quot;, response);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Client"><a href="#Client" class="headerlink" title="Client"></a>Client</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br></pre></td><td class="code"><pre><span class="line">public class RpcClientHandler extends SimpleChannelInboundHandler&lt;Response&gt;&#123;</span><br><span class="line">    private static final Logger LOGGER = LoggerFactory.getLogger(RpcClientHandler.class);</span><br><span class="line">    protected void channelRead0(ChannelHandlerContext ctx, Response msg) throws Exception &#123;</span><br><span class="line">        LOGGER.info(&quot;Receive &#123;&#125;&quot;, msg);</span><br><span class="line">        BlockingQueue&lt;Response&gt; blockingQueue = RpcClient.responseMap.get(msg.getRequestId());</span><br><span class="line">        blockingQueue.put(msg);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">public class RpcClient &#123;</span><br><span class="line">    private static AtomicLong atomicLong = new AtomicLong();</span><br><span class="line">    private String serverIp;</span><br><span class="line">    private int port;</span><br><span class="line">    private boolean started;</span><br><span class="line">    private Channel channel;</span><br><span class="line">    EventLoopGroup eventLoopGroup = new NioEventLoopGroup();</span><br><span class="line">    public static ConcurrentMap&lt;Long, BlockingQueue&lt;Response&gt;&gt; responseMap = new ConcurrentHashMap&lt;Long, BlockingQueue&lt;Response&gt;&gt;();</span><br><span class="line">    public RpcClient(String serverIp, int port) &#123;</span><br><span class="line">        this.serverIp = serverIp;</span><br><span class="line">        this.port = port;</span><br><span class="line">    &#125;</span><br><span class="line">    public void init() &#123;</span><br><span class="line">        Bootstrap bootstrap = new Bootstrap();</span><br><span class="line">        bootstrap.channel(NioSocketChannel.class)</span><br><span class="line">                .group(eventLoopGroup)</span><br><span class="line">                .handler(new ChannelInitializer&lt;Channel&gt;() &#123;</span><br><span class="line">                    protected void initChannel(Channel ch) throws Exception &#123;</span><br><span class="line">                        ch.pipeline().addLast(new LoggingHandler(LogLevel.INFO))</span><br><span class="line">                                .addLast(new ResponseCodec())</span><br><span class="line">                                .addLast(new RpcClientHandler())</span><br><span class="line">                                .addLast(new RequestCodec())</span><br><span class="line">                        ;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;);</span><br><span class="line">        try &#123;</span><br><span class="line">            ChannelFuture f = bootstrap.connect(serverIp, port).sync();</span><br><span class="line">            this.channel = f.channel();</span><br><span class="line">        &#125; catch (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    public Response sendMessage(Class&lt;?&gt; clazz, Method method, Object[] args) &#123;</span><br><span class="line">        Request request = new Request();</span><br><span class="line">        request.setRequestId(atomicLong.incrementAndGet());</span><br><span class="line">        request.setMethod(method.getName());</span><br><span class="line">        request.setParams(args);</span><br><span class="line">        request.setClazz(clazz);</span><br><span class="line">        request.setParameterTypes(method.getParameterTypes());</span><br><span class="line">        this.channel.writeAndFlush(request);</span><br><span class="line">        BlockingQueue&lt;Response&gt; blockingQueue = new ArrayBlockingQueue&lt;Response&gt;(1);</span><br><span class="line">        responseMap.put(request.getRequestId(), blockingQueue);</span><br><span class="line">        try &#123;</span><br><span class="line">            return blockingQueue.take();</span><br><span class="line">        &#125; catch (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">            return null;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    public &lt;T&gt; T newProxy(final Class&lt;T&gt; serviceInterface) &#123;</span><br><span class="line">        Object o = Proxy.newProxyInstance(RpcClient.class.getClassLoader(), new Class[]&#123;serviceInterface&#125;, new InvocationHandler() &#123;</span><br><span class="line">            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable &#123;</span><br><span class="line">                return sendMessage(serviceInterface, method, args).getResponse();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">        return (T) o;</span><br><span class="line">    &#125;</span><br><span class="line">    public void destroy() &#123;</span><br><span class="line">        try &#123;</span><br><span class="line">            this.channel.close().sync();</span><br><span class="line">        &#125; catch (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125; finally &#123;</span><br><span class="line">            eventLoopGroup.shutdownGracefully();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Server"><a href="#Server" class="headerlink" title="Server"></a>Server</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br></pre></td><td class="code"><pre><span class="line">public class RpcServer &#123;</span><br><span class="line">    private static final Logger LOGGER = LoggerFactory.getLogger(RpcServer.class);</span><br><span class="line">    private String ip;</span><br><span class="line">    private int port;</span><br><span class="line">    private boolean started = false;</span><br><span class="line">    private Channel channel;</span><br><span class="line">    private Object serviceImpl;</span><br><span class="line">    private EventLoopGroup bossGroup = new NioEventLoopGroup();</span><br><span class="line">    private EventLoopGroup workerGroup = new NioEventLoopGroup();</span><br><span class="line">    public RpcServer(int port, Object serviceImpl) &#123;</span><br><span class="line">        this.port = port;</span><br><span class="line">        this.serviceImpl = serviceImpl;</span><br><span class="line">    &#125;</span><br><span class="line">    public void init() &#123;</span><br><span class="line">        ServerBootstrap bootstrap = new ServerBootstrap();</span><br><span class="line">        bootstrap.group(bossGroup, workerGroup)</span><br><span class="line">                .channel(NioServerSocketChannel.class)</span><br><span class="line">                .childHandler(new ChannelInitializer&lt;SocketChannel&gt;() &#123;</span><br><span class="line">                    protected void initChannel(SocketChannel ch) throws Exception &#123;</span><br><span class="line">                        ch.pipeline()</span><br><span class="line">                                .addLast(new LoggingHandler(LogLevel.INFO))</span><br><span class="line">                                .addLast(new RequestCodec())</span><br><span class="line">                                .addLast(new RpcServerHandler(serviceImpl))</span><br><span class="line">                                .addLast(new ResponseCodec())</span><br><span class="line">                        ;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;);</span><br><span class="line">        try &#123;</span><br><span class="line">            ChannelFuture sync = bootstrap.bind(port).sync();</span><br><span class="line">            LOGGER.info(&quot;Server Started At &#123;&#125;&quot;, port);</span><br><span class="line">            started = true;</span><br><span class="line">            this.channel = sync.channel();</span><br><span class="line">            sync.channel().closeFuture().sync();</span><br><span class="line">        &#125; catch (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125; finally &#123;</span><br><span class="line">            bossGroup.shutdownGracefully();</span><br><span class="line">            workerGroup.shutdownGracefully();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">public class RpcServerHandler extends SimpleChannelInboundHandler&lt;Request&gt; &#123;</span><br><span class="line">    private Object service;</span><br><span class="line">    public RpcServerHandler(Object serviceImpl) &#123;</span><br><span class="line">        this.service = serviceImpl;</span><br><span class="line">    &#125;</span><br><span class="line">    protected void channelRead0(ChannelHandlerContext ctx, Request msg) throws Exception &#123;</span><br><span class="line">        String methodName = msg.getMethod();</span><br><span class="line">        Object[] params = msg.getParams();</span><br><span class="line">        Class&lt;?&gt;[] parameterTypes = msg.getParameterTypes();</span><br><span class="line">        long requestId = msg.getRequestId();</span><br><span class="line">        Method method = service.getClass().getDeclaredMethod(methodName, parameterTypes);</span><br><span class="line">        method.setAccessible(true);</span><br><span class="line">        Object invoke = method.invoke(service, params);</span><br><span class="line">        Response response = new Response();</span><br><span class="line">        response.setRequestId(requestId);</span><br><span class="line">        response.setResponse(invoke);</span><br><span class="line">        ctx.pipeline().writeAndFlush(response);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="序列化部分"><a href="#序列化部分" class="headerlink" title="序列化部分"></a>序列化部分</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">public class Serializer &#123;</span><br><span class="line">    public static byte[] serialize(Object obj)&#123;</span><br><span class="line">        RuntimeSchema schema = RuntimeSchema.createFrom(obj.getClass());</span><br><span class="line">        LinkedBuffer buffer = LinkedBuffer.allocate(LinkedBuffer.DEFAULT_BUFFER_SIZE);</span><br><span class="line">        return ProtostuffIOUtil.toByteArray(obj, schema, buffer);</span><br><span class="line">    &#125;</span><br><span class="line">    public static &lt;T&gt; T deserialize(Class&lt;T&gt; clazz, byte[] bytes) &#123;</span><br><span class="line">        try &#123;</span><br><span class="line">            T t = clazz.newInstance();</span><br><span class="line">            RuntimeSchema schema = RuntimeSchema.createFrom(clazz);</span><br><span class="line">            ProtostuffIOUtil.mergeFrom(bytes, t, schema);</span><br><span class="line">            return t;</span><br><span class="line">        &#125; catch (InstantiationException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125; catch (IllegalAccessException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">        return null;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Java/" rel="tag"># Java</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/01/28/ReentrantReadWriteLock源码解读/" rel="prev" title="ReentrantReadWriteLock源码解读">
+      <i class="fa fa-chevron-left"></i> ReentrantReadWriteLock源码解读
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2018/03/04/Java中synchronized的实现原理/" rel="next" title="Java中synchronized的实现原理及锁优化">
+      Java中synchronized的实现原理及锁优化 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#RPC简介"><span class="nav-number">1.</span> <span class="nav-text">RPC简介</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#RPC原理浅析"><span class="nav-number">2.</span> <span class="nav-text">RPC原理浅析</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#序列化和反序列化"><span class="nav-number">3.</span> <span class="nav-text">序列化和反序列化</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#IO传输"><span class="nav-number">4.</span> <span class="nav-text">IO传输</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#TCP粘包、拆包"><span class="nav-number">4.1.</span> <span class="nav-text">TCP粘包、拆包</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#服务的注册发布和监听"><span class="nav-number">5.</span> <span class="nav-text">服务的注册发布和监听</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#服务路由"><span class="nav-number">6.</span> <span class="nav-text">服务路由</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#IO调用方式"><span class="nav-number">7.</span> <span class="nav-text">IO调用方式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#nio和bio"><span class="nav-number">7.1.</span> <span class="nav-text">nio和bio</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#同步和异步"><span class="nav-number">7.2.</span> <span class="nav-text">同步和异步</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#实现"><span class="nav-number">8.</span> <span class="nav-text">实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#请求和返回的抽象"><span class="nav-number">8.1.</span> <span class="nav-text">请求和返回的抽象</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#编解码部分"><span class="nav-number">8.2.</span> <span class="nav-text">编解码部分</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Client"><span class="nav-number">8.3.</span> <span class="nav-text">Client</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Server"><span class="nav-number">8.4.</span> <span class="nav-text">Server</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#序列化部分"><span class="nav-number">8.5.</span> <span class="nav-text">序列化部分</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">sanzhuan</p>
+  <div class="site-description" itemprop="description">sanzhuan's blog | java | rust</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">23</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">sanzhuan</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://muse.theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a>
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+<script src="/js/utils.js"></script><script src="/js/motion.js"></script>
+<script src="/js/schemes/muse.js"></script>
+<script src="/js/next-boot.js"></script>
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

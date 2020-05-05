@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 3.9.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"xmwu2016.github.io","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="Semaphore简介  信号量Semaphore是一个控制访问多个共享资源的计数器。官方文档是这样说的：  A counting semaphore.  Conceptually, a semaphore maintains a set of permits.  Each aquire blocks if necessary until a permit is available, and th">
+<meta name="keywords" content="Java,源码解读">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Semaphore源码分析">
+<meta property="og:url" content="http://xmwu2016.github.io/2018/01/20/Semaphore源码分析/index.html">
+<meta property="og:site_name" content="sanzhuan的个人博客">
+<meta property="og:description" content="Semaphore简介  信号量Semaphore是一个控制访问多个共享资源的计数器。官方文档是这样说的：  A counting semaphore.  Conceptually, a semaphore maintains a set of permits.  Each aquire blocks if necessary until a permit is available, and th">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2020-05-05T13:22:24.768Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Semaphore源码分析">
+<meta name="twitter:description" content="Semaphore简介  信号量Semaphore是一个控制访问多个共享资源的计数器。官方文档是这样说的：  A counting semaphore.  Conceptually, a semaphore maintains a set of permits.  Each aquire blocks if necessary until a permit is available, and th">
+
+<link rel="canonical" href="http://xmwu2016.github.io/2018/01/20/Semaphore源码分析/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>Semaphore源码分析 | sanzhuan的个人博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">sanzhuan的个人博客</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">种一棵树最好的时间是十年前，其次是现在</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://xmwu2016.github.io/2018/01/20/Semaphore源码分析/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="sanzhuan">
+      <meta itemprop="description" content="sanzhuan's blog | java | rust">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="sanzhuan的个人博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Semaphore源码分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2018-01-20 22:34:27" itemprop="dateCreated datePublished" datetime="2018-01-20T22:34:27+08:00">2018-01-20</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2020-05-05 21:22:24" itemprop="dateModified" datetime="2020-05-05T21:22:24+08:00">2020-05-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">In</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Java/" itemprop="url" rel="index"><span itemprop="name">Java</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="Semaphore简介"><a href="#Semaphore简介" class="headerlink" title="Semaphore简介"></a>Semaphore简介</h2><p>  信号量Semaphore是一个控制访问多个共享资源的计数器。官方文档是这样说的：</p>
+<blockquote>
+<p>A counting semaphore.  Conceptually, a semaphore maintains a set of permits.  Each aquire blocks if necessary until a permit is available, and then takes it.  Each release adds a permit,potentially releasing a blocking acquirer. However, no actual permit objects are used; the Semaphore just keeps a count of the number available and acts accordingly.</p>
+</blockquote>
+<blockquote>
+<p>Semaphores are often used to restrict the number of threads than can access some (physical or logical) resource. For example, here is a class that uses a semaphore to control access to a pool of items:</p>
+</blockquote>
+<h2 id="源码实现"><a href="#源码实现" class="headerlink" title="源码实现"></a>源码实现</h2><p>Semaphore实现基于AQS框架。使用AQS state表示准入数目，分为公平版本和非公平版本。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br></pre></td><td class="code"><pre><span class="line">public class Semaphore &#123;</span><br><span class="line">    private final Sync sync;</span><br><span class="line">    abstract static class Sync extends AbstractQueuedSynchronizer &#123;</span><br><span class="line"></span><br><span class="line">        Sync(int permits) &#123;</span><br><span class="line">            setState(permits);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        final int getPermits() &#123;</span><br><span class="line">            return getState();</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        final int nonfairTryAcquireShared(int acquires) &#123;</span><br><span class="line">            for (;;) &#123;</span><br><span class="line">                int available = getState();</span><br><span class="line">                int remaining = available - acquires;</span><br><span class="line">                if (remaining &lt; 0 ||</span><br><span class="line">                    compareAndSetState(available, remaining))</span><br><span class="line">                    return remaining;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        protected final boolean tryReleaseShared(int releases) &#123;</span><br><span class="line">            for (;;) &#123;</span><br><span class="line">                int current = getState();</span><br><span class="line">                int next = current + releases;</span><br><span class="line">                if (next &lt; current) // overflow</span><br><span class="line">                    throw new Error(&quot;Maximum permit count exceeded&quot;);</span><br><span class="line">                if (compareAndSetState(current, next))</span><br><span class="line">                    return true;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        final void reducePermits(int reductions) &#123;</span><br><span class="line">            for (;;) &#123;</span><br><span class="line">                int current = getState();</span><br><span class="line">                int next = current - reductions;</span><br><span class="line">                if (next &gt; current) // underflow</span><br><span class="line">                    throw new Error(&quot;Permit count underflow&quot;);</span><br><span class="line">                if (compareAndSetState(current, next))</span><br><span class="line">                    return;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        final int drainPermits() &#123;</span><br><span class="line">            for (;;) &#123;</span><br><span class="line">                int current = getState();</span><br><span class="line">                if (current == 0 || compareAndSetState(current, 0))</span><br><span class="line">                    return current;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * NonFair version</span><br><span class="line">     */</span><br><span class="line">    static final class NonfairSync extends Sync &#123;</span><br><span class="line"></span><br><span class="line">        NonfairSync(int permits) &#123;</span><br><span class="line">            super(permits);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        protected int tryAcquireShared(int acquires) &#123;</span><br><span class="line">            return nonfairTryAcquireShared(acquires);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * Fair version</span><br><span class="line">     */</span><br><span class="line">    static final class FairSync extends Sync &#123;</span><br><span class="line"></span><br><span class="line">        FairSync(int permits) &#123;</span><br><span class="line">            super(permits);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        protected int tryAcquireShared(int acquires) &#123;</span><br><span class="line">            for (;;) &#123;</span><br><span class="line">            	 //存在比当前线程等待时间长的线程 在AQS syn队列上等待</span><br><span class="line">                if (hasQueuedPredecessors())</span><br><span class="line">                    return -1;</span><br><span class="line">                int available = getState();</span><br><span class="line">                int remaining = available - acquires;</span><br><span class="line">                // remaining &lt; 0 在AQS syn队列上等待 否则直接返回</span><br><span class="line">                if (remaining &lt; 0 ||</span><br><span class="line">                    compareAndSetState(available, remaining))</span><br><span class="line">                    return remaining;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p>根据构造函数参数标志fair控制是否适用严格的FIFO,默认是非公平的FIFO</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">public Semaphore(int permits) &#123;</span><br><span class="line">    sync = new NonfairSync(permits);</span><br><span class="line">&#125;</span><br><span class="line">   </span><br><span class="line">public Semaphore(int permits, boolean fair) &#123;</span><br><span class="line">    sync = fair ? new FairSync(permits) : new NonfairSync(permits);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>获取和释放一次准入的一组操作</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">public void acquire() throws InterruptedException &#123;</span><br><span class="line">    sync.acquireSharedInterruptibly(1);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">public void acquireUninterruptibly() &#123;</span><br><span class="line">    sync.acquireShared(1);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">public boolean tryAcquire() &#123;</span><br><span class="line">    return sync.nonfairTryAcquireShared(1) &gt;= 0;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">public boolean tryAcquire(long timeout, TimeUnit unit)</span><br><span class="line">    throws InterruptedException &#123;</span><br><span class="line">    return sync.tryAcquireSharedNanos(1, unit.toNanos(timeout));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">public void release() &#123;</span><br><span class="line">    sync.releaseShared(1);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>还有一次获取和释放多个准入的一组操作</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">public void acquire(int permits) throws InterruptedException &#123;</span><br><span class="line">    if (permits &lt; 0) throw new IllegalArgumentException();</span><br><span class="line">    sync.acquireSharedInterruptibly(permits);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">public void acquireUninterruptibly(int permits) &#123;</span><br><span class="line">    if (permits &lt; 0) throw new IllegalArgumentException();</span><br><span class="line">    sync.acquireShared(permits);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">public boolean tryAcquire(int permits) &#123;</span><br><span class="line">    if (permits &lt; 0) throw new IllegalArgumentException();</span><br><span class="line">    return sync.nonfairTryAcquireShared(permits) &gt;= 0;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">public boolean tryAcquire(int permits, long timeout, TimeUnit unit)</span><br><span class="line">    throws InterruptedException &#123;</span><br><span class="line">    if (permits &lt; 0) throw new IllegalArgumentException();</span><br><span class="line">    return sync.tryAcquireSharedNanos(permits, unit.toNanos(timeout));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">public void release(int permits) &#123;</span><br><span class="line">    if (permits &lt; 0) throw new IllegalArgumentException();</span><br><span class="line">    sync.releaseShared(permits);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><ul>
+<li>《Java并发编程实战》</li>
+<li>JDK8源码</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Java/" rel="tag"># Java</a>
+              <a href="/tags/源码解读/" rel="tag"># 源码解读</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/01/20/缓存/" rel="prev" title="缓存">
+      <i class="fa fa-chevron-left"></i> 缓存
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2018/01/20/CountDownLatch源码分析/" rel="next" title="CountDownLatch源码分析">
+      CountDownLatch源码分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Semaphore简介"><span class="nav-number">1.</span> <span class="nav-text">Semaphore简介</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#源码实现"><span class="nav-number">2.</span> <span class="nav-text">源码实现</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#参考"><span class="nav-number">3.</span> <span class="nav-text">参考</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">sanzhuan</p>
+  <div class="site-description" itemprop="description">sanzhuan's blog | java | rust</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">23</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">sanzhuan</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://muse.theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a>
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+<script src="/js/utils.js"></script><script src="/js/motion.js"></script>
+<script src="/js/schemes/muse.js"></script>
+<script src="/js/next-boot.js"></script>
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

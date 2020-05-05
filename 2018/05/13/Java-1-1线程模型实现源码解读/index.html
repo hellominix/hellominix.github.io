@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 3.9.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"xmwu2016.github.io","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="Java的线程模型线程模型按照内核态线程和用户态线程的关系可以粗略地分为N：M、1:N和1:1线程模型。Java线程在JDK 1.2之前是基于Green Threads实现的，而在1.2中，线程模型替换成基于操作系统原生线程模型来实现，在Window和Linux中都是采用1:1的线程模型 源码实现Java的1:1线程模型即一个Java线程映射为一个操作系统的线程。首先看java.lang.Thre">
+<meta name="keywords" content="Java,源码解读">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Java 1:1线程模型实现源码解读">
+<meta property="og:url" content="http://xmwu2016.github.io/2018/05/13/Java-1-1线程模型实现源码解读/index.html">
+<meta property="og:site_name" content="sanzhuan的个人博客">
+<meta property="og:description" content="Java的线程模型线程模型按照内核态线程和用户态线程的关系可以粗略地分为N：M、1:N和1:1线程模型。Java线程在JDK 1.2之前是基于Green Threads实现的，而在1.2中，线程模型替换成基于操作系统原生线程模型来实现，在Window和Linux中都是采用1:1的线程模型 源码实现Java的1:1线程模型即一个Java线程映射为一个操作系统的线程。首先看java.lang.Thre">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2020-05-05T13:22:24.767Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Java 1:1线程模型实现源码解读">
+<meta name="twitter:description" content="Java的线程模型线程模型按照内核态线程和用户态线程的关系可以粗略地分为N：M、1:N和1:1线程模型。Java线程在JDK 1.2之前是基于Green Threads实现的，而在1.2中，线程模型替换成基于操作系统原生线程模型来实现，在Window和Linux中都是采用1:1的线程模型 源码实现Java的1:1线程模型即一个Java线程映射为一个操作系统的线程。首先看java.lang.Thre">
+
+<link rel="canonical" href="http://xmwu2016.github.io/2018/05/13/Java-1-1线程模型实现源码解读/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>Java 1:1线程模型实现源码解读 | sanzhuan的个人博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">sanzhuan的个人博客</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">种一棵树最好的时间是十年前，其次是现在</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://xmwu2016.github.io/2018/05/13/Java-1-1线程模型实现源码解读/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="sanzhuan">
+      <meta itemprop="description" content="sanzhuan's blog | java | rust">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="sanzhuan的个人博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Java 1:1线程模型实现源码解读
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2018-05-13 21:03:10" itemprop="dateCreated datePublished" datetime="2018-05-13T21:03:10+08:00">2018-05-13</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2020-05-05 21:22:24" itemprop="dateModified" datetime="2020-05-05T21:22:24+08:00">2020-05-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">In</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Java/" itemprop="url" rel="index"><span itemprop="name">Java</span></a>
+                </span>
+                  , 
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Java/源码解读/" itemprop="url" rel="index"><span itemprop="name">源码解读</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="Java的线程模型"><a href="#Java的线程模型" class="headerlink" title="Java的线程模型"></a>Java的线程模型</h2><p>线程模型按照内核态线程和用户态线程的关系可以粗略地分为N：M、1:N和1:1线程模型。Java线程在JDK 1.2之前是基于Green Threads实现的，而在1.2中，线程模型替换成基于操作系统原生线程模型来实现，在Window和Linux中都是采用1:1的线程模型</p>
+<h2 id="源码实现"><a href="#源码实现" class="headerlink" title="源码实现"></a>源码实现</h2><p>Java的1:1线程模型即一个Java线程映射为一个操作系统的线程。首先看java.lang.Thread的源码</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line">public</span><br><span class="line">class Thread implements Runnable &#123;</span><br><span class="line"></span><br><span class="line">    public synchronized void start() &#123;</span><br><span class="line">        if (threadStatus != 0)</span><br><span class="line">            throw new IllegalThreadStateException();</span><br><span class="line">            </span><br><span class="line">        group.add(this);</span><br><span class="line"></span><br><span class="line">        boolean started = false;</span><br><span class="line">        try &#123;</span><br><span class="line">            start0();</span><br><span class="line">            started = true;</span><br><span class="line">        &#125; finally &#123;</span><br><span class="line">            try &#123;</span><br><span class="line">                if (!started) &#123;</span><br><span class="line">                    group.threadStartFailed(this);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125; catch (Throwable ignore) &#123;</span><br><span class="line">                /* do nothing. If start0 threw a Throwable then</span><br><span class="line">                  it will be passed up the call stack */</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    private native void start0();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>调用线程start会掉用start0这个本地方法，然后掉用线程的Runnable接口的run方法，那么run方法是怎么掉用的呢</p>
+<p>start0这个native方法在src/share/native/java/lang/Thread.c这个文件中定义。可以看到start0调用的是c++ 的JVM_StartThread这个函数</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">static JNINativeMethod methods[] = &#123;</span><br><span class="line">    &#123;&quot;start0&quot;,           &quot;()V&quot;,        (void *)&amp;JVM_StartThread&#125;,</span><br><span class="line">    &#123;&quot;stop0&quot;,            &quot;(&quot; OBJ &quot;)V&quot;, (void *)&amp;JVM_StopThread&#125;,</span><br><span class="line">    &#123;&quot;isAlive&quot;,          &quot;()Z&quot;,        (void *)&amp;JVM_IsThreadAlive&#125;,</span><br><span class="line">    &#123;&quot;suspend0&quot;,         &quot;()V&quot;,        (void *)&amp;JVM_SuspendThread&#125;,</span><br><span class="line">    &#123;&quot;resume0&quot;,          &quot;()V&quot;,        (void *)&amp;JVM_ResumeThread&#125;,</span><br><span class="line">    &#123;&quot;setPriority0&quot;,     &quot;(I)V&quot;,       (void *)&amp;JVM_SetThreadPriority&#125;,</span><br><span class="line">    &#123;&quot;yield&quot;,            &quot;()V&quot;,        (void *)&amp;JVM_Yield&#125;,</span><br><span class="line">    &#123;&quot;sleep&quot;,            &quot;(J)V&quot;,       (void *)&amp;JVM_Sleep&#125;,</span><br><span class="line">    &#123;&quot;currentThread&quot;,    &quot;()&quot; THD,     (void *)&amp;JVM_CurrentThread&#125;,</span><br><span class="line">    &#123;&quot;countStackFrames&quot;, &quot;()I&quot;,        (void *)&amp;JVM_CountStackFrames&#125;,</span><br><span class="line">    &#123;&quot;interrupt0&quot;,       &quot;()V&quot;,        (void *)&amp;JVM_Interrupt&#125;,</span><br><span class="line">    &#123;&quot;isInterrupted&quot;,    &quot;(Z)Z&quot;,       (void *)&amp;JVM_IsInterrupted&#125;,</span><br><span class="line">    &#123;&quot;holdsLock&quot;,        &quot;(&quot; OBJ &quot;)Z&quot;, (void *)&amp;JVM_HoldsLock&#125;,</span><br><span class="line">    &#123;&quot;getThreads&quot;,        &quot;()[&quot; THD,   (void *)&amp;JVM_GetAllThreads&#125;,</span><br><span class="line">    &#123;&quot;dumpThreads&quot;,      &quot;([&quot; THD &quot;)[[&quot; STE, (void *)&amp;JVM_DumpThreads&#125;,</span><br><span class="line">    &#123;&quot;setNativeName&quot;,    &quot;(&quot; STR &quot;)V&quot;, (void *)&amp;JVM_SetNativeThreadName&#125;,</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line">JNIEXPORT void JNICALL</span><br><span class="line">Java_java_lang_Thread_registerNatives(JNIEnv *env, jclass cls)</span><br><span class="line">&#123;</span><br><span class="line">    (*env)-&gt;RegisterNatives(env, cls, methods, ARRAY_LENGTH(methods));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>而JVM_StartThread这个函数在src/share/vm/prims/jvm.cpp这个文件中定义。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line">JVM_ENTRY(void, JVM_StartThread(JNIEnv* env, jobject jthread))</span><br><span class="line">  JVMWrapper(&quot;JVM_StartThread&quot;);</span><br><span class="line">  JavaThread *native_thread = NULL;</span><br><span class="line"></span><br><span class="line">  &#123;</span><br><span class="line">    MutexLocker mu(Threads_lock);</span><br><span class="line"></span><br><span class="line">    if (java_lang_Thread::thread(JNIHandles::resolve_non_null(jthread)) != NULL) &#123;</span><br><span class="line">      throw_illegal_thread_state = true;</span><br><span class="line">    &#125; else &#123;</span><br><span class="line"></span><br><span class="line">      jlong size =</span><br><span class="line">             java_lang_Thread::stackSize(JNIHandles::resolve_non_null(jthread));</span><br><span class="line"></span><br><span class="line">      size_t sz = size &gt; 0 ? (size_t) size : 0;</span><br><span class="line">      native_thread = new JavaThread(&amp;thread_entry, sz);</span><br><span class="line"></span><br><span class="line">      if (native_thread-&gt;osthread() != NULL) &#123;</span><br><span class="line">        native_thread-&gt;prepare(jthread);</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  if (throw_illegal_thread_state) &#123;</span><br><span class="line">    THROW(vmSymbols::java_lang_IllegalThreadStateException());</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  assert(native_thread != NULL, &quot;Starting null thread?&quot;);</span><br><span class="line"></span><br><span class="line">  if (native_thread-&gt;osthread() == NULL) &#123;</span><br><span class="line">    delete native_thread;</span><br><span class="line">    if (JvmtiExport::should_post_resource_exhausted()) &#123;</span><br><span class="line">      JvmtiExport::post_resource_exhausted(</span><br><span class="line">        JVMTI_RESOURCE_EXHAUSTED_OOM_ERROR | JVMTI_RESOURCE_EXHAUSTED_THREADS,</span><br><span class="line">        &quot;unable to create new native thread&quot;);</span><br><span class="line">    &#125;</span><br><span class="line">    THROW_MSG(vmSymbols::java_lang_OutOfMemoryError(),</span><br><span class="line">              &quot;unable to create new native thread&quot;);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  Thread::start(native_thread);</span><br><span class="line"></span><br><span class="line">JVM_END</span><br></pre></td></tr></table></figure>
+
+<p>其中native_thread = new JavaThread(&amp;thread_entry, sz);这行代码创建一个c++ JavaThread对象。thread_enty内容为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">static void thread_entry(JavaThread* thread, TRAPS) &#123;</span><br><span class="line">  HandleMark hm(THREAD);</span><br><span class="line">  Handle obj(THREAD, thread-&gt;threadObj());</span><br><span class="line">  JavaValue result(T_VOID);</span><br><span class="line">  JavaCalls::call_virtual(&amp;result,</span><br><span class="line">                          obj,</span><br><span class="line">                          KlassHandle(THREAD, SystemDictionary::Thread_klass()),</span><br><span class="line">                          vmSymbols::run_method_name(),</span><br><span class="line">                          vmSymbols::void_method_signature(),</span><br><span class="line">                          THREAD);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中vmSymbols::run_method_name()在vmSymbols.hpp中定义为</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">class vmSymbolHandles: AllStatic &#123;   </span><br><span class="line">   …  </span><br><span class="line">    template(run_method_name,&quot;run&quot;)  </span><br><span class="line">   …  </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>也就是调用操作系统API以后就直接调用run函数，这就是调用start函数以后立即调用run函数的魔法所在。<br>而在linux下调用的创建线程的API其实就是pthread API</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">JavaThread::JavaThread(ThreadFunction entry_point, size_t stack_sz) :</span><br><span class="line">  Thread()</span><br><span class="line">&#123;</span><br><span class="line">  if (TraceThreadEvents) &#123;</span><br><span class="line">    tty-&gt;print_cr(&quot;creating thread %p&quot;, this);</span><br><span class="line">  &#125;</span><br><span class="line">  initialize();</span><br><span class="line">  _jni_attach_state = _not_attaching_via_jni;</span><br><span class="line">  set_entry_point(entry_point);</span><br><span class="line">  os::ThreadType thr_type = os::java_thread;</span><br><span class="line">  thr_type = entry_point == &amp;compiler_thread_entry ? os::compiler_thread :</span><br><span class="line">                                                     os::java_thread;</span><br><span class="line">  os::create_thread(this, thr_type, stack_sz);</span><br><span class="line">  _safepoint_visible = false;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>os::create_thread实现了操作系统相关的实际的线程创建操作。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line">bool os::create_thread(Thread* thread, ThreadType thr_type, size_t stack_size) &#123;</span><br><span class="line"></span><br><span class="line">  OSThread* osthread = new OSThread(NULL, NULL);</span><br><span class="line">  if (osthread == NULL) &#123;</span><br><span class="line">    return false;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  osthread-&gt;set_thread_type(thr_type);</span><br><span class="line"></span><br><span class="line">  // Initial state is ALLOCATED but not INITIALIZED</span><br><span class="line">  osthread-&gt;set_state(ALLOCATED);</span><br><span class="line"></span><br><span class="line">  thread-&gt;set_osthread(osthread);</span><br><span class="line"></span><br><span class="line">  // init thread attributes</span><br><span class="line">  pthread_attr_t attr;</span><br><span class="line">  pthread_attr_init(&amp;attr);</span><br><span class="line">  pthread_attr_setdetachstate(&amp;attr, PTHREAD_CREATE_DETACHED);</span><br><span class="line"></span><br><span class="line">  // glibc guard page</span><br><span class="line">  pthread_attr_setguardsize(&amp;attr, os::Linux::default_guard_size(thr_type));</span><br><span class="line"></span><br><span class="line">  ThreadState state;</span><br><span class="line"></span><br><span class="line">  &#123;</span><br><span class="line">    // Serialize thread creation if we are running with fixed stack LinuxThreads</span><br><span class="line">    bool lock = os::Linux::is_LinuxThreads() &amp;&amp; !os::Linux::is_floating_stack();</span><br><span class="line">    if (lock) &#123;</span><br><span class="line">      os::Linux::createThread_lock()-&gt;lock_without_safepoint_check();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    pthread_t tid;</span><br><span class="line">    int ret = pthread_create(&amp;tid, &amp;attr, (void* (*)(void*)) java_start, thread);</span><br><span class="line"></span><br><span class="line">    pthread_attr_destroy(&amp;attr);</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line">  &#125;</span><br><span class="line">  return true;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><ul>
+<li><a href="https://medium.com/@unmeshvjoshi/how-java-thread-maps-to-os-thread-e280a9fb2e06" target="_blank" rel="noopener">https://medium.com/@unmeshvjoshi/how-java-thread-maps-to-os-thread-e280a9fb2e06</a></li>
+<li><a href="https://blog.csdn.net/u012109105/article/details/75047470?locationNum=4&amp;fps=1" target="_blank" rel="noopener">https://blog.csdn.net/u012109105/article/details/75047470?locationNum=4&amp;fps=1</a></li>
+<li><a href="https://www.ibm.com/developerworks/cn/java/j-lo-processthread/#icomments" target="_blank" rel="noopener">https://www.ibm.com/developerworks/cn/java/j-lo-processthread/#icomments</a></li>
+<li><a href="https://juejin.im/entry/5960852cf265da6c2e0f8a31" target="_blank" rel="noopener">https://juejin.im/entry/5960852cf265da6c2e0f8a31</a></li>
+<li><a href="http://hg.openjdk.java.net/jdk8u/jdk8u/jdk/file/3ad03712ea43/src/share/native/java/lang/Thread.c" target="_blank" rel="noopener">http://hg.openjdk.java.net/jdk8u/jdk8u/jdk/file/3ad03712ea43/src/share/native/java/lang/Thread.c</a></li>
+<li><a href="http://hg.openjdk.java.net/jdk8/jdk8/hotspot/file/87ee5ee27509/src/os/linux/vm/os_linux.cpp" target="_blank" rel="noopener">http://hg.openjdk.java.net/jdk8/jdk8/hotspot/file/87ee5ee27509/src/os/linux/vm/os_linux.cpp</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Java/" rel="tag"># Java</a>
+              <a href="/tags/源码解读/" rel="tag"># 源码解读</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/03/05/线程的阻塞与唤醒/" rel="prev" title="线程的阻塞与唤醒">
+      <i class="fa fa-chevron-left"></i> 线程的阻塞与唤醒
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2018/05/13/通用方法-原则/" rel="next" title="通用方法/原则">
+      通用方法/原则 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Java的线程模型"><span class="nav-number">1.</span> <span class="nav-text">Java的线程模型</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#源码实现"><span class="nav-number">2.</span> <span class="nav-text">源码实现</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#参考"><span class="nav-number">3.</span> <span class="nav-text">参考</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">sanzhuan</p>
+  <div class="site-description" itemprop="description">sanzhuan's blog | java | rust</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">23</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">sanzhuan</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://muse.theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a>
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+<script src="/js/utils.js"></script><script src="/js/motion.js"></script>
+<script src="/js/schemes/muse.js"></script>
+<script src="/js/next-boot.js"></script>
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
